@@ -11,27 +11,33 @@ This script will do the next steps:
 
 @author: Diego
 """
+import os
 import sqlite3
 import zipfile
-import pandas as pd
-import os
-import wget
 from urllib.request import urlopen
+
+import pandas as pd
+import wget
 from bs4 import BeautifulSoup
 
 cwd = os.getcwd()
+
 if not os.path.exists("data"):
     os.makedirs("data")
-if not os.path.exists("data\\cotahist"):
-    os.makedirs("data\\cotahist")
-if not os.path.exists("data\\ftp_files"):
-    os.makedirs("data\\ftp_files")
-if not os.path.exists("data\\temp"):
-    os.makedirs("data\\temp")
-conn = sqlite3.connect(cwd + "\\data\\finance.db")
+if not os.path.exists(os.path.join("data", "cotahist")):
+    os.makedirs(os.path.join("data", "cotahist"))
+if not os.path.exists(os.path.join("data", "ftp_files")):
+    os.makedirs(os.path.join("data", "ftp_files"))
+if not os.path.exists(os.path.join("data", "temp")):
+    os.makedirs(os.path.join("data", "temp"))
+
+
+conn = sqlite3.connect(os.path.join(cwd, "data", "finance.db"))
 db = conn.cursor()
 
-#%% functions
+# %% functions
+
+
 def create_tables():
     db.execute(
         """CREATE TABLE IF NOT EXISTS files
@@ -41,53 +47,53 @@ def create_tables():
     for fs in ["bpa", "bpp"]:
         db.execute(
             f"""CREATE TABLE IF NOT EXISTS {fs}
-                       (cnpj TEXT, 
-                        dt_refer INTEGER, 
-                        grupo_dfp TEXT, 
-                        dt_fim_exerc DATE, 
-                        cd_conta TEXT, 
-                        ds_conta TEXT, 
-                        vl_conta INTEGER, 
+                       (cnpj TEXT,
+                        dt_refer INTEGER,
+                        grupo_dfp TEXT,
+                        dt_fim_exerc DATE,
+                        cd_conta TEXT,
+                        ds_conta TEXT,
+                        vl_conta INTEGER,
                         itr_dfp TEXT)"""
         )
     for fs in ["dre", "dva", "dfc"]:
         db.execute(
             f"""CREATE TABLE IF NOT EXISTS {fs}
-                       (cnpj TEXT, 
-                        dt_refer INTEGER, 
-                        grupo_dfp TEXT, 
-                        dt_ini_exerc DATE, 
-                        dt_fim_exerc DATE, 
-                        cd_conta TEXT, 
-                        ds_conta TEXT, 
-                        vl_conta INTEGER, 
-                        itr_dfp TEXT, 
+                       (cnpj TEXT,
+                        dt_refer INTEGER,
+                        grupo_dfp TEXT,
+                        dt_ini_exerc DATE,
+                        dt_fim_exerc DATE,
+                        cd_conta TEXT,
+                        ds_conta TEXT,
+                        vl_conta INTEGER,
+                        itr_dfp TEXT,
                         fiscal_quarter INTEGER)"""
         )
     db.execute(
         """CREATE TABLE IF NOT EXISTS dmpl
-                   (cnpj TEXT, 
-                    dt_refer INTEGER, 
-                    grupo_dfp TEXT, 
-                    dt_ini_exerc DATE, 
-                    dt_fim_exerc DATE, 
-                    cd_conta TEXT, 
-                    ds_conta TEXT, 
-                    coluna_df TEXT, 
-                    vl_conta INTEGER, 
-                    itr_dfp TEXT, 
+                   (cnpj TEXT,
+                    dt_refer INTEGER,
+                    grupo_dfp TEXT,
+                    dt_ini_exerc DATE,
+                    dt_fim_exerc DATE,
+                    cd_conta TEXT,
+                    ds_conta TEXT,
+                    coluna_df TEXT,
+                    vl_conta INTEGER,
+                    itr_dfp TEXT,
                     fiscal_quarter INTEGER)"""
     )
     db.execute(
         """CREATE TABLE IF NOT EXISTS tickers
-                   (ticker TEXT, 
-                    cnpj TEXT, 
-                    type TEXT, 
-                    sector TEXT, 
-                    subsector TEXT, 
-                    segment TEXT, 
-                    denom_social TEXT, 
-                    denom_comerc TEXT, 
+                   (ticker TEXT,
+                    cnpj TEXT,
+                    type TEXT,
+                    sector TEXT,
+                    subsector TEXT,
+                    segment TEXT,
+                    denom_social TEXT,
+                    denom_comerc TEXT,
                     PRIMARY KEY (ticker))"""
     )
     return
@@ -98,14 +104,15 @@ def update_db():
     create_tables()
 
     # Update tickers registers with data from github
-    tickers = pd.read_csv('https://raw.githubusercontent.com/dss-Diego/br_stocks/master/data/tickers.csv')
+    tickers = pd.read_csv(
+        'https://raw.githubusercontent.com/dss-Diego/br_stocks/master/data/tickers.csv')
     db.execute('DELETE FROM tickers')
     conn.commit()
     tickers.to_sql('tickers', conn, if_exists='replace', index=False)
 
     # clean temp directory
-    for file in os.listdir(cwd + "\\data\\temp"):
-        os.remove(cwd + "\\data\\temp\\" + file)
+    for file in os.listdir(os.path.join(cwd, "data", "temp")):
+        os.remove(os.path.join(cwd, "data", "temp", file))
 
     # create dataframe with the files already processed
     db_files = pd.read_sql("SELECT * FROM files", conn)
@@ -148,7 +155,7 @@ def update_db():
         # 1 - download the zip file
         type_ = file["file_name"][0:3]
         file_url = f"http://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/{type_}/DADOS/{file['file_name']}.zip"
-        os.chdir(cwd + "\\data\\temp")
+        os.chdir(os.path.join(cwd, "data", "temp"))
         file_name = wget.download(file_url)
         with zipfile.ZipFile(file_name, "r") as zip_ref:
             zip_ref.extractall()
@@ -161,7 +168,7 @@ def update_db():
         load_fs()
         # 3 - update database with the new file information
         db.execute(
-            f"""INSERT INTO files 
+            f"""INSERT INTO files
                        VALUES ('{file['file_name']}', '{file['url_date']}')"""
         )
         print(f"{file['file_name']} downloaded successfully.")
@@ -171,23 +178,25 @@ def update_db():
 
 
 def load_fs():
-    for file in os.listdir(cwd + "\\data\\temp"):
-        if len(file) != 23: # Ignores useless files like itr_cia_aberta_2019.csv
-            fs = file[15:-13].lower() # fs -> financial statement
+    for file in os.listdir(os.path.join(cwd, "data", "temp")):
+        if len(file) != 23:  # Ignores useless files like itr_cia_aberta_2019.csv
+            fs = file[15:-13].lower()  # fs -> financial statement
             if len(fs) == 6:
                 fs = fs[:3]
-            itr_dfp = file[0:3] # itr_dfp is used to update the db.
+            itr_dfp = file[0:3]  # itr_dfp is used to update the db.
             df = pd.read_csv(
-                cwd + "\\data\\temp\\" + file, sep=";", header=0, encoding="latin-1", parse_dates=['DT_FIM_EXERC']
+                os.path.join(cwd, "data", "temp", file), sep=";", header=0, encoding="latin-1", parse_dates=['DT_FIM_EXERC']
             )
-            if len(df) > 0: # so times there are empty files
+            if len(df) > 0:  # so times there are empty files
 
                 # cleaning and formating the dataframe
                 df.columns = df.columns.str.lower()
                 df = df.rename(columns={"cnpj_cia": "cnpj"})
                 df = df[df["ordem_exerc"] == "ÚLTIMO"]
-                grupo = df["grupo_dfp"].str.split(" ", expand=True)[1].unique()[0]
-                dt_refer = int(df["dt_refer"].str[0:4].unique()[0]) # keep only year as reference to update the database
+                grupo = df["grupo_dfp"].str.split(
+                    " ", expand=True)[1].unique()[0]
+                # keep only year as reference to update the database
+                dt_refer = int(df["dt_refer"].str[0:4].unique()[0])
                 df["dt_refer"] = dt_refer
                 df["grupo_dfp"] = grupo
                 df["itr_dfp"] = itr_dfp
@@ -216,7 +225,8 @@ def load_fs():
                     df["dt_ini_exerc"] = pd.to_datetime(df["dt_ini_exerc"])
                     df["fiscal_quarter"] = (
                         (
-                            (df["dt_fim_exerc"].dt.year - df["dt_ini_exerc"].dt.year)
+                            (df["dt_fim_exerc"].dt.year -
+                             df["dt_ini_exerc"].dt.year)
                             * 12
                             + (
                                 df["dt_fim_exerc"].dt.month
@@ -258,21 +268,18 @@ def load_fs():
                                 "escala_moeda",
                             ]
                         ]
-                df["vl_conta"][df["escala_moeda"] == "UNIDADE"] = df["vl_conta"] / 1000
+                df["vl_conta"][df["escala_moeda"] ==
+                               "UNIDADE"] = df["vl_conta"] / 1000
                 df.drop(columns=["escala_moeda"], inplace=True)
                 db.execute(
-                    f"""DELETE FROM {fs} 
-                               WHERE dt_refer = {dt_refer} AND 
-                                    itr_dfp = '{itr_dfp}' AND 
+                    f"""DELETE FROM {fs}
+                               WHERE dt_refer = {dt_refer} AND
+                                    itr_dfp = '{itr_dfp}' AND
                                     grupo_dfp = '{grupo}' """
                 )
                 df.to_sql(f"{fs}", conn, if_exists="append", index=False)
-        os.remove(cwd + "\\data\\temp\\" + file)
+        os.remove(os.path.join(cwd, "data", "temp", file))
     return
 
 
-#%%
-
-
-
-
+# %%
